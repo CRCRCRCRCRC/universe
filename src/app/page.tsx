@@ -357,7 +357,7 @@ export default function Home() {
     <div className="relative min-h-screen overflow-hidden bg-gradient-to-b from-slate-50 via-white to-slate-100 text-slate-900">
       <AuroraBackground />
 
-      <main className="relative mx-auto flex min-h-screen max-w-6xl flex-col px-5 pb-28 pt-8 md:px-8">
+      <main className="relative flex min-h-screen w-full flex-col px-0 pb-28 pt-4 md:px-0 md:pt-6">
         <div className="pointer-events-none fixed bottom-6 left-6 z-30 flex flex-col gap-2">
           <button
             onClick={() => zoomTo(scale + 0.1)}
@@ -386,7 +386,7 @@ export default function Home() {
           </div>
         )}
 
-        <section className="relative mt-4 flex-1">
+        <section className="relative flex-1">
           {loading ? (
             <div className="grid gap-3 md:grid-cols-2 lg:grid-cols-3">
               {[...Array(6)].map((_, idx) => (
@@ -415,11 +415,12 @@ export default function Home() {
           ) : (
             <div
               ref={boardRef}
-              className="relative min-h-[70vh] cursor-grab touch-none active:cursor-grabbing"
+              className="relative h-[calc(100vh-140px)] min-h-[70vh] w-full cursor-grab touch-none active:cursor-grabbing md:h-[calc(100vh-180px)]"
               onPointerDown={handleCanvasPointerDown}
               onPointerMove={handleCanvasPointerMove}
               onPointerUp={handleCanvasPointerUp}
               onPointerLeave={handleCanvasPointerUp}
+              onPointerCancel={handleCanvasPointerUp}
               style={{
                 transform: `translate(${pan.x}px, ${pan.y}px) scale(${scale})`,
                 transformOrigin: "0 0",
