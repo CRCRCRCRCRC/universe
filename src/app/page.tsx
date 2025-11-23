@@ -358,24 +358,24 @@ export default function Home() {
       <AuroraBackground />
 
       <main className="relative mx-auto flex min-h-screen max-w-6xl flex-col px-5 pb-28 pt-8 md:px-8">
-        <div className="pointer-events-none fixed bottom-6 right-6 z-30 flex flex-col gap-2 md:left-6 md:right-auto">
+        <div className="pointer-events-none fixed bottom-6 left-6 z-30 flex flex-col gap-2">
           <button
             onClick={() => zoomTo(scale + 0.1)}
             className="pointer-events-auto rounded-full bg-white px-3 py-2 text-sm font-semibold text-slate-700 shadow ring-1 ring-slate-200 transition hover:-translate-y-px"
           >
-            放大
+            🔍
           </button>
           <button
             onClick={() => zoomTo(1)}
             className="pointer-events-auto rounded-full bg-white px-3 py-2 text-sm font-semibold text-slate-700 shadow ring-1 ring-slate-200 transition hover:-translate-y-px"
           >
-            中等
+            =
           </button>
           <button
             onClick={() => zoomTo(scale - 0.1)}
             className="pointer-events-auto rounded-full bg-white px-3 py-2 text-sm font-semibold text-slate-700 shadow ring-1 ring-slate-200 transition hover:-translate-y-px"
           >
-            縮小
+            🔎
           </button>
         </div>
 
