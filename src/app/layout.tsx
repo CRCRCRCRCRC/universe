@@ -17,7 +17,7 @@ const body = Manrope({
 });
 
 export const metadata: Metadata = {
-  title: "星雲留言牆｜Vercel Storage (Neon)",
+  title: "Universe",
   description: "開放式留言板，資料即時存進 Vercel Storage (Neon)",
 };
 
