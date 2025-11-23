@@ -13,6 +13,8 @@ export type MessageRecord = {
 let tableReady: Promise<void> | null = null;
 
 async function ensureTable() {
+  ensureConnection();
+
   if (!tableReady) {
     tableReady = sql`CREATE TABLE IF NOT EXISTS guestbook_messages (
       id SERIAL PRIMARY KEY,
@@ -24,6 +26,12 @@ async function ensureTable() {
     );`.then(() => undefined);
   }
   await tableReady;
+}
+
+function ensureConnection() {
+  if (!process.env.POSTGRES_URL) {
+    throw new Error("NO_POSTGRES_URL");
+  }
 }
 
 export async function fetchMessages(): Promise<MessageRecord[]> {

@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import {
   AnimatePresence,
   motion,
@@ -19,15 +19,6 @@ type Message = {
 
 type ToastState = { type: "success" | "error"; message: string } | null;
 
-const fadeIn = {
-  initial: { opacity: 0, y: 24 },
-  animate: {
-    opacity: 1,
-    y: 0,
-    transition: { duration: 0.4, ease: [0.22, 1, 0.36, 1] as const },
-  },
-};
-
 const glassCard =
   "backdrop-blur-xl bg-white/5 ring-1 ring-white/10 shadow-[0_20px_60px_-24px_rgba(0,0,0,0.6)]";
 
@@ -39,34 +30,6 @@ function formatTime(iso: string) {
     hour: "2-digit",
     minute: "2-digit",
   });
-}
-
-function SparklesIcon(props: React.SVGProps<SVGSVGElement>) {
-  return (
-    <svg viewBox="0 0 24 24" fill="none" {...props}>
-      <path
-        d="M10 3.5 8.6 7.9 4 9.3l4.6 1.4L10 15l1.4-4.3L16 9.3l-4.6-1.4L10 3.5Z"
-        stroke="currentColor"
-        strokeWidth={1.6}
-        strokeLinecap="round"
-        strokeLinejoin="round"
-      />
-      <path
-        d="M16.5 4.5 15.7 6.8 13.5 7.5l2.2.7.8 2.3.8-2.3 2.2-.7-2.2-.7-.8-2.3Z"
-        stroke="currentColor"
-        strokeWidth={1.4}
-        strokeLinecap="round"
-        strokeLinejoin="round"
-      />
-      <path
-        d="M17 14.5 16.4 16.1 14.8 16.6 16.4 17.1 17 18.7 17.6 17.1 19.2 16.6 17.6 16.1 17 14.5Z"
-        stroke="currentColor"
-        strokeWidth={1.2}
-        strokeLinecap="round"
-        strokeLinejoin="round"
-      />
-    </svg>
-  );
 }
 
 function DragIcon(props: React.SVGProps<SVGSVGElement>) {
@@ -135,7 +98,7 @@ export default function Home() {
   const [messages, setMessages] = useState<Message[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
-  const [isSheetOpen, setIsSheetOpen] = useState(false);
+  const [isModalOpen, setIsModalOpen] = useState(false);
   const [newTitle, setNewTitle] = useState("");
   const [newContent, setNewContent] = useState("");
   const [submitting, setSubmitting] = useState(false);
@@ -144,22 +107,8 @@ export default function Home() {
   const toastTimer = useRef<NodeJS.Timeout | null>(null);
   const pendingOrder = useRef<Message[] | null>(null);
 
-  const headline = useMemo(
-    () => [
-      "投下你的想法，不用登入、不留痕跡。",
-      "拖移、編輯，就像玩弄一片星雲。",
-    ],
-    [],
-  );
-
-  useEffect(() => {
-    loadMessages();
-    return () => {
-      if (toastTimer.current) {
-        clearTimeout(toastTimer.current);
-      }
-    };
-  }, []);
+  const hasMessages = messages.length > 0;
+  const shouldShowBoard = loading || hasMessages || !!error;
 
   const pushToast = (type: "success" | "error", message: string) => {
     if (toastTimer.current) clearTimeout(toastTimer.current);
@@ -167,60 +116,73 @@ export default function Home() {
     toastTimer.current = setTimeout(() => setToast(null), 2600);
   };
 
-  const loadMessages = async () => {
+  const loadMessages = useCallback(async () => {
     try {
       setError(null);
       setLoading(true);
       const res = await fetch("/api/messages", { cache: "no-store" });
       if (!res.ok) {
-        throw new Error("failed");
+        const data = await res.json().catch(() => null);
+        throw new Error(data?.error || "failed");
       }
       const data = (await res.json()) as { messages: Message[] };
       setMessages(data.messages);
     } catch (err) {
       console.error(err);
-      setError("載入留言時出現問題，請稍後重試。");
+      setError(
+        "\u8f09\u5165\u7559\u8a00\u6642\u51fa\u73fe\u554f\u984c\uff0c\u8acb\u78ba\u8a8d Storage/Postgres \u8a2d\u5b9a\u3002",
+      );
+      pushToast(
+        "error",
+        "\u8f09\u5165\u7559\u8a00\u5931\u6557\uff0c\u8acb\u7a0d\u5f8c\u518d\u8a66\u3002",
+      );
     } finally {
       setLoading(false);
     }
-  };
+  }, []);
+
+  useEffect(() => {
+    loadMessages();
+    return () => {
+      if (toastTimer.current) clearTimeout(toastTimer.current);
+    };
+  }, [loadMessages]);
 
   const handleCreate = async () => {
     if (!newContent.trim()) {
-      pushToast("error", "內容不能是空白哦！");
+      pushToast("error", "\u5167\u5bb9\u4e0d\u80fd\u662f\u7a7a\u767d\u54e6\uff01");
       return;
     }
-
     try {
       setSubmitting(true);
       const res = await fetch("/api/messages", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          title: newTitle.trim() || "未命名的靈感",
+          title: newTitle.trim() || "\u672a\u547d\u540d\u7684\u9748\u611f",
           content: newContent.trim(),
         }),
       });
-
       if (!res.ok) {
         const data = await res.json();
-        throw new Error(data?.error || "新增失敗");
+        throw new Error(data?.error || "\u65b0\u589e\u5931\u6557");
       }
-
       const data = (await res.json()) as { message: Message };
       setMessages((prev) =>
         [...prev, data.message].sort(
           (a, b) => a.order_index - b.order_index || a.id - b.id,
         ),
       );
-
       setNewTitle("");
       setNewContent("");
-      setIsSheetOpen(false);
-      pushToast("success", "留言已新增 🚀");
+      setIsModalOpen(false);
+      pushToast("success", "\u7559\u8a00\u5df2\u65b0\u589e \ud83d\ude80");
     } catch (err) {
       console.error(err);
-      pushToast("error", "新增留言失敗，請再試一次");
+      pushToast(
+        "error",
+        "\u65b0\u589e\u7559\u8a00\u5931\u6557\uff0c\u8acb\u518d\u8a66\u4e00\u6b21",
+      );
     } finally {
       setSubmitting(false);
     }
@@ -232,8 +194,8 @@ export default function Home() {
     content: string,
   ) => {
     if (!content.trim()) {
-      pushToast("error", "內容不能是空白哦！");
-      throw new Error("內容不能為空");
+      pushToast("error", "\u5167\u5bb9\u4e0d\u80fd\u662f\u7a7a\u767d\u54e6\uff01");
+      throw new Error("\u5167\u5bb9\u4e0d\u80fd\u70ba\u7a7a");
     }
 
     const res = await fetch("/api/messages", {
@@ -241,22 +203,22 @@ export default function Home() {
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
         id,
-        title: title.trim() || "未命名的靈感",
+        title: title.trim() || "\u672a\u547d\u540d\u7684\u9748\u611f",
         content: content.trim(),
       }),
     });
 
     if (!res.ok) {
       const data = await res.json();
-      pushToast("error", data?.error || "更新失敗");
-      throw new Error(data?.error || "更新失敗");
+      pushToast("error", data?.error || "\u66f4\u65b0\u5931\u6557");
+      throw new Error(data?.error || "\u66f4\u65b0\u5931\u6557");
     }
 
     const data = (await res.json()) as { message: Message };
     setMessages((prev) =>
       prev.map((item) => (item.id === id ? data.message : item)),
     );
-    pushToast("success", "已更新這張卡片");
+    pushToast("success", "\u5df2\u66f4\u65b0\u9019\u5f35\u5361\u7247");
   };
 
   const handleReorder = (next: Message[]) => {
@@ -268,31 +230,27 @@ export default function Home() {
     if (!pendingOrder.current) return;
     const snapshot = pendingOrder.current;
     setSavingOrder(true);
-
     try {
       const order = snapshot.map((item, index) => ({
         id: item.id,
         order_index: index,
       }));
-
       const res = await fetch("/api/messages", {
         method: "PUT",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ order }),
       });
-
       if (!res.ok) {
         const data = await res.json();
-        throw new Error(data?.error || "排序儲存失敗");
+        throw new Error(data?.error || "\u6392\u5e8f\u5132\u5b58\u5931\u6557");
       }
-
       setMessages(
         snapshot.map((item, idx) => ({ ...item, order_index: idx })),
       );
-      pushToast("success", "排序已同步到資料庫");
+      pushToast("success", "\u6392\u5e8f\u5df2\u540c\u6b65\u5230\u8cc7\u6599\u5eab");
     } catch (err) {
       console.error(err);
-      pushToast("error", "排序同步失敗，稍後再試");
+      pushToast("error", "\u6392\u5e8f\u540c\u6b65\u5931\u6557\uff0c\u7a0d\u5f8c\u518d\u8a66");
     } finally {
       pendingOrder.current = null;
       setSavingOrder(false);
@@ -303,149 +261,71 @@ export default function Home() {
     <div className="relative min-h-screen overflow-hidden bg-slate-950 text-slate-50">
       <AuroraBackground />
 
-      <main className="relative mx-auto flex max-w-6xl flex-col gap-8 px-6 pb-32 pt-16 md:px-10">
-        <motion.header
-          {...fadeIn}
-          className="flex flex-col gap-6 md:flex-row md:items-center md:justify-between"
-        >
-          <div className="flex flex-col gap-4">
-            <div className="inline-flex w-fit items-center gap-2 rounded-full border border-white/10 bg-white/5 px-3 py-1 text-sm text-slate-200 shadow-lg shadow-teal-500/10">
-              <SparklesIcon className="h-5 w-5 text-teal-300" />
-              Vercel Storage · Neon · 開放留言
-            </div>
-            <div className="space-y-3">
-              <h1 className="font-display text-4xl font-semibold leading-tight text-white md:text-5xl">
-                星雲留言牆
-              </h1>
-              <p className="max-w-3xl text-base text-slate-300 md:text-lg">
-                {headline[0]}
-                <br />
-                {headline[1]}
-              </p>
-            </div>
-            <div className="flex flex-wrap items-center gap-3 text-sm text-slate-300">
-              <StatusPill color="emerald">即時同步到 Neon</StatusPill>
-              <StatusPill color="cyan">
-                {savingOrder ? "儲存排序中…" : "拖曳卡片隨你排"}
-              </StatusPill>
-              <StatusPill color="violet">無需註冊、即填即現</StatusPill>
-            </div>
-          </div>
-
-          <motion.div
-            className={`relative hidden w-full max-w-sm overflow-hidden rounded-3xl ${glassCard} md:block`}
-            initial={{ opacity: 0, x: 40 }}
-            animate={{ opacity: 1, x: 0, transition: { delay: 0.1 } }}
-          >
-            <div className="absolute inset-0 bg-gradient-to-br from-teal-500/30 via-cyan-400/20 to-purple-600/30 blur-3xl" />
-            <div className="relative space-y-3 p-5">
-              <div className="flex items-center justify-between text-sm text-slate-200">
-                <span>最新新增</span>
-                <span className="text-teal-200">
-                  {messages.length > 0
-                    ? formatTime(messages[messages.length - 1].created_at)
-                    : "尚無留言"}
-                </span>
-              </div>
-              <div className="h-[1px] w-full bg-gradient-to-r from-white/5 via-white/25 to-white/5" />
-              <p className="text-sm text-slate-200">
-                這裡的每張卡片都存進 Vercel Storage (Neon)，
-                拖移、編輯都會即時同步。
-              </p>
-            </div>
-          </motion.div>
-        </motion.header>
-
-        <section className="relative">
-          <div className="absolute inset-0 -z-10 rounded-3xl bg-gradient-to-b from-white/5 via-transparent to-transparent blur-3xl" />
-          <div
-            className={`rounded-3xl ${glassCard} border border-white/5 px-4 py-6 md:px-6 md:py-8`}
-          >
-            <div className="flex items-center justify-between">
-              <div className="flex items-center gap-2 text-sm text-slate-200">
-                <span className="inline-flex h-2 w-2 rounded-full bg-teal-400 shadow-[0_0_0_6px_rgba(45,212,191,0.2)]" />
-                所有人都能拖移排序或編輯
-              </div>
+      <main className="relative mx-auto flex min-h-screen max-w-5xl flex-col px-5 pb-28 pt-12 md:px-8">
+        {shouldShowBoard && (
+          <section className="relative flex-1">
+            <div className="absolute inset-0 -z-10 rounded-3xl bg-gradient-to-b from-white/5 via-transparent to-transparent blur-3xl" />
+            <div
+              className={`rounded-3xl ${glassCard} border border-white/5 px-4 py-6 md:px-6 md:py-8`}
+            >
               {savingOrder && (
-                <motion.div
-                  className="flex items-center gap-2 text-xs text-teal-200"
-                  initial={{ opacity: 0 }}
-                  animate={{ opacity: 1 }}
-                  exit={{ opacity: 0 }}
+                <div className="mb-4 inline-flex items-center gap-2 rounded-full bg-white/5 px-3 py-1 text-xs text-teal-100">
+                  <span className="h-2 w-2 rounded-full bg-teal-300" />
+                  {"\u6392\u5e8f\u540c\u6b65\u4e2d\u2026"}
+                </div>
+              )}
+
+              {loading ? (
+                <div className="grid gap-3 md:grid-cols-2">
+                  {[...Array(4)].map((_, idx) => (
+                    <motion.div
+                      key={idx}
+                      className="h-32 rounded-2xl bg-white/5"
+                      animate={{ opacity: [0.35, 0.75, 0.35] }}
+                      transition={{
+                        repeat: Infinity,
+                        duration: 1.6,
+                        delay: idx * 0.1,
+                      }}
+                    />
+                  ))}
+                </div>
+              ) : error ? (
+                <div className="flex flex-col items-start gap-3 rounded-2xl bg-white/5 p-6 text-sm text-slate-200">
+                  <p>{error}</p>
+                  <button
+                    onClick={loadMessages}
+                    className="rounded-full bg-white/10 px-4 py-2 font-semibold text-white transition hover:bg-white/20"
+                  >
+                    {"\u91cd\u65b0\u5617\u8a66"}
+                  </button>
+                </div>
+              ) : hasMessages ? (
+                <Reorder.Group
+                  axis="y"
+                  values={messages}
+                  onReorder={handleReorder}
+                  className="flex flex-col gap-4"
                 >
-                  <motion.div
-                    className="h-2 w-2 rounded-full bg-teal-300"
-                    animate={{ scale: [1, 1.4, 1] }}
-                    transition={{ repeat: Infinity, duration: 1.2 }}
-                  />
-                  同步中
-                </motion.div>
+                  {messages.map((message) => (
+                    <MessageCard
+                      key={message.id}
+                      message={message}
+                      onSave={handleSaveEdit}
+                      onDragEnd={commitReorder}
+                    />
+                  ))}
+                </Reorder.Group>
+              ) : (
+                <div className="h-24 rounded-2xl border border-white/5 bg-white/5" />
               )}
             </div>
-
-            {loading ? (
-              <div className="mt-6 grid gap-3 md:grid-cols-2">
-                {[...Array(4)].map((_, idx) => (
-                  <motion.div
-                    key={idx}
-                    className="h-32 rounded-2xl bg-white/5"
-                    animate={{ opacity: [0.4, 0.7, 0.4] }}
-                    transition={{ repeat: Infinity, duration: 1.8, delay: idx * 0.1 }}
-                  />
-                ))}
-              </div>
-            ) : error ? (
-              <div className="mt-6 flex flex-col items-center gap-3 rounded-2xl bg-white/5 p-8 text-center text-slate-200">
-                <p>{error}</p>
-                <button
-                  onClick={loadMessages}
-                  className="rounded-full bg-white/10 px-4 py-2 text-sm font-medium text-white transition hover:bg-white/20"
-                >
-                  重試
-                </button>
-              </div>
-            ) : (
-              <div className="mt-6">
-                <AnimatePresence mode="popLayout">
-                  {messages.length === 0 ? (
-                    <motion.div
-                      {...fadeIn}
-                      className="flex flex-col items-center gap-4 rounded-2xl bg-white/5 p-8 text-center text-slate-200"
-                    >
-                      <p>還沒有任何留言，按下「新增留言」立即填上一張！</p>
-                      <button
-                        onClick={() => setIsSheetOpen(true)}
-                        className="rounded-full bg-gradient-to-r from-teal-400 to-cyan-400 px-5 py-2 text-sm font-semibold text-slate-950 shadow-lg shadow-cyan-500/30 transition hover:shadow-cyan-500/50"
-                      >
-                        新增留言
-                      </button>
-                    </motion.div>
-                  ) : (
-                    <Reorder.Group
-                      axis="y"
-                      values={messages}
-                      onReorder={handleReorder}
-                      className="flex flex-col gap-4"
-                    >
-                      {messages.map((message) => (
-                        <MessageCard
-                          key={message.id}
-                          message={message}
-                          onSave={handleSaveEdit}
-                          onDragEnd={commitReorder}
-                        />
-                      ))}
-                    </Reorder.Group>
-                  )}
-                </AnimatePresence>
-              </div>
-            )}
-          </div>
-        </section>
+          </section>
+        )}
       </main>
 
       <motion.button
-        onClick={() => setIsSheetOpen(true)}
+        onClick={() => setIsModalOpen(true)}
         className="group fixed bottom-6 left-1/2 z-30 flex -translate-x-1/2 items-center gap-3 rounded-full bg-gradient-to-r from-teal-400 via-cyan-300 to-emerald-300 px-6 py-3 text-base font-semibold text-slate-950 shadow-[0_20px_60px_-24px_rgba(16,185,129,0.8)] transition hover:scale-[1.02] hover:shadow-[0_24px_80px_-30px_rgba(34,211,238,0.8)]"
         whileTap={{ scale: 0.98 }}
         initial={{ opacity: 0, y: 30 }}
@@ -454,13 +334,13 @@ export default function Home() {
         <span className="flex h-8 w-8 items-center justify-center rounded-full bg-slate-950/10 text-slate-950 ring-1 ring-white/40 transition group-hover:rotate-6">
           <span className="text-xl leading-none">+</span>
         </span>
-        新增留言
+        {"\u65b0\u589e\u7559\u8a00"}
       </motion.button>
 
-      <CreateSheet
-        open={isSheetOpen}
+      <CreateModal
+        open={isModalOpen}
         onClose={() => {
-          setIsSheetOpen(false);
+          setIsModalOpen(false);
           setSubmitting(false);
         }}
         title={newTitle}
@@ -520,7 +400,7 @@ function MessageCard({ message, onSave, onDragEnd }: MessageCardProps) {
       await onSave(message.id, draftTitle, draftContent);
       setIsEditing(false);
     } catch {
-      // Error is handled by parent toast.
+      // Toast already handled.
     } finally {
       setSaving(false);
     }
@@ -551,7 +431,7 @@ function MessageCard({ message, onSave, onDragEnd }: MessageCardProps) {
                 controls.start(event);
               }}
               className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-white/5 text-slate-200 ring-1 ring-white/10 transition hover:bg-white/10"
-              title="拖移卡片"
+              title="\u62d6\u79fb\u5361\u7247"
             >
               <DragIcon className="h-5 w-5" />
             </button>
@@ -578,7 +458,7 @@ function MessageCard({ message, onSave, onDragEnd }: MessageCardProps) {
             className="flex items-center gap-2 rounded-full bg-white/5 px-3 py-2 text-xs font-semibold text-slate-100 transition hover:bg-white/10"
           >
             <EditIcon className="h-4 w-4" />
-            {isEditing ? "取消" : "編輯"}
+            {isEditing ? "\u53d6\u6d88" : "\u7de8\u8f2f"}
           </button>
         </div>
 
@@ -611,7 +491,7 @@ function MessageCard({ message, onSave, onDragEnd }: MessageCardProps) {
                 }}
                 className="rounded-full px-3 py-2 font-medium text-slate-300 transition hover:bg-white/5"
               >
-                還原
+                {"\u9084\u539f"}
               </button>
             )}
             {isEditing ? (
@@ -620,11 +500,11 @@ function MessageCard({ message, onSave, onDragEnd }: MessageCardProps) {
                 disabled={saving}
                 className="flex items-center gap-2 rounded-full bg-gradient-to-r from-emerald-400 to-teal-400 px-4 py-2 font-semibold text-slate-950 transition hover:shadow-[0_12px_40px_-20px_rgba(52,211,153,0.8)] disabled:cursor-not-allowed disabled:opacity-60"
               >
-                {saving ? "儲存中…" : "儲存"}
+                {saving ? "\u5132\u5b58\u4e2d\u2026" : "\u5132\u5b58"}
               </button>
             ) : (
               <span className="rounded-full bg-white/5 px-3 py-2 text-slate-200">
-                可拖曳排序
+                {"\u53ef\u62d6\u66f3\u6392\u5e8f"}
               </span>
             )}
           </div>
@@ -634,7 +514,7 @@ function MessageCard({ message, onSave, onDragEnd }: MessageCardProps) {
   );
 }
 
-function CreateSheet({
+function CreateModal({
   open,
   onClose,
   onSubmit,
@@ -657,21 +537,25 @@ function CreateSheet({
     <AnimatePresence>
       {open && (
         <motion.div
-          className="fixed inset-0 z-40 flex items-end justify-center bg-black/60 backdrop-blur-sm"
+          className="fixed inset-0 z-40 flex items-center justify-center bg-black/60 backdrop-blur-sm"
           initial={{ opacity: 0 }}
           animate={{ opacity: 1 }}
           exit={{ opacity: 0 }}
         >
           <motion.div
-            initial={{ y: "100%" }}
-            animate={{ y: 0, transition: { type: "spring", damping: 18 } }}
-            exit={{ y: "100%" }}
-            className="w-full max-w-3xl rounded-t-[28px] border border-white/10 bg-slate-900/90 p-6 shadow-2xl md:rounded-3xl md:pb-8"
+            initial={{ scale: 0.95, opacity: 0 }}
+            animate={{
+              scale: 1,
+              opacity: 1,
+              transition: { type: "spring", damping: 18 },
+            }}
+            exit={{ scale: 0.95, opacity: 0 }}
+            className="w-full max-w-xl rounded-3xl border border-white/10 bg-slate-900/95 p-6 shadow-2xl"
           >
             <div className="mb-6 flex items-center justify-between">
               <div className="flex items-center gap-2 text-sm text-slate-200">
                 <span className="inline-flex h-2 w-2 rounded-full bg-emerald-400 shadow-[0_0_0_6px_rgba(52,211,153,0.25)]" />
-                新增留言
+                {"\u65b0\u589e\u7559\u8a00"}
               </div>
               <button
                 onClick={onClose}
@@ -681,23 +565,27 @@ function CreateSheet({
               </button>
             </div>
 
-            <div className="grid gap-4 md:grid-cols-2">
+            <div className="grid gap-4">
               <div className="space-y-2">
-                <label className="text-sm text-slate-300">標題</label>
+                <label className="text-sm text-slate-300">
+                  {"\u6a19\u984c"}
+                </label>
                 <input
                   value={title}
                   onChange={(e) => onTitleChange(e.target.value)}
-                  placeholder="給這則留言一個名字"
+                  placeholder="\u7d66\u9019\u5247\u7559\u8a00\u4e00\u500b\u540d\u5b57"
                   className="w-full rounded-2xl bg-white/5 px-4 py-3 text-base text-white outline-none ring-1 ring-transparent transition focus:ring-white/30"
                   maxLength={120}
                 />
               </div>
-              <div className="space-y-2 md:col-span-2">
-                <label className="text-sm text-slate-300">內容</label>
+              <div className="space-y-2">
+                <label className="text-sm text-slate-300">
+                  {"\u5167\u5bb9"}
+                </label>
                 <textarea
                   value={content}
                   onChange={(e) => onContentChange(e.target.value)}
-                  placeholder="寫下任何想法、感受或提醒。大家都能看見，也能拖移或修改。"
+                  placeholder="\u5beb\u4e0b\u4efb\u4f55\u60f3\u6cd5\u3001\u611f\u53d7\u6216\u63d0\u9192\u3002\u5927\u5bb6\u90fd\u80fd\u770b\u898b\uff0c\u4e5f\u80fd\u62d6\u79fb\u6216\u4fee\u6539\u3002"
                   className="h-36 w-full resize-none rounded-2xl bg-white/5 px-4 py-3 text-base text-white outline-none ring-1 ring-transparent transition focus:ring-white/30"
                   maxLength={2000}
                 />
@@ -706,21 +594,21 @@ function CreateSheet({
 
             <div className="mt-6 flex items-center justify-between">
               <div className="text-sm text-slate-400">
-                不需登入，送出即刻出現在牆上。
+                {"\u4e0d\u9700\u767b\u5165\uff0c\u9001\u51fa\u5373\u523b\u51fa\u73fe\u5728\u7246\u4e0a\u3002"}
               </div>
               <div className="flex gap-3">
                 <button
                   onClick={onClose}
                   className="rounded-full px-4 py-2 text-sm font-semibold text-slate-300 transition hover:bg-white/5"
                 >
-                  取消
+                  {"\u53d6\u6d88"}
                 </button>
                 <button
                   onClick={onSubmit}
                   disabled={submitting}
                   className="rounded-full bg-gradient-to-r from-teal-400 to-cyan-300 px-5 py-2 text-sm font-semibold text-slate-950 shadow-lg shadow-cyan-500/30 transition hover:shadow-cyan-500/50 disabled:cursor-not-allowed disabled:opacity-60"
                 >
-                  {submitting ? "送出中…" : "新增"}
+                  {submitting ? "\u9001\u51fa\u4e2d\u2026" : "\u65b0\u589e"}
                 </button>
               </div>
             </div>
@@ -728,30 +616,6 @@ function CreateSheet({
         </motion.div>
       )}
     </AnimatePresence>
-  );
-}
-
-function StatusPill({
-  children,
-  color = "teal",
-}: {
-  children: React.ReactNode;
-  color?: "teal" | "emerald" | "cyan" | "violet";
-}) {
-  const palette: Record<string, string> = {
-    teal: "from-teal-500/25 to-cyan-500/25 text-teal-100",
-    emerald: "from-emerald-500/25 to-teal-500/25 text-emerald-100",
-    cyan: "from-cyan-500/25 to-blue-500/25 text-cyan-100",
-    violet: "from-violet-500/25 to-fuchsia-500/25 text-violet-100",
-  };
-
-  return (
-    <span
-      className={`inline-flex items-center gap-2 rounded-full px-3 py-1 text-xs font-medium ring-1 ring-white/10 bg-gradient-to-r ${palette[color]}`}
-    >
-      <span className="inline-block h-1.5 w-1.5 rounded-full bg-white/70" />
-      {children}
-    </span>
   );
 }
 

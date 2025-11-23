@@ -14,6 +14,12 @@ export async function GET() {
     return NextResponse.json({ messages });
   } catch (error) {
     console.error("[GET_MESSAGES]", error);
+    if (error instanceof Error && error.message === "NO_POSTGRES_URL") {
+      return NextResponse.json(
+        { error: "請在 Vercel 專案設定 Storage/Postgres，讓 POSTGRES_URL 生效。" },
+        { status: 500 },
+      );
+    }
     return NextResponse.json(
       { error: "Failed to load messages." },
       { status: 500 },
@@ -29,10 +35,14 @@ export async function POST(request: Request) {
     return NextResponse.json({ message });
   } catch (error) {
     console.error("[CREATE_MESSAGE]", error);
-    const message =
-      error instanceof Error && error.message === "CONTENT_REQUIRED"
-        ? "內容不能為空白"
-        : "新增留言時發生錯誤";
+    let message = "新增留言時發生錯誤";
+    if (error instanceof Error) {
+      if (error.message === "NO_POSTGRES_URL") {
+        message = "請先在 Vercel 設定 Storage/Postgres，啟用 POSTGRES_URL。";
+      } else if (error.message === "CONTENT_REQUIRED") {
+        message = "內容不能為空白";
+      }
+    }
 
     return NextResponse.json({ error: message }, { status: 400 });
   }
@@ -57,6 +67,8 @@ export async function PATCH(request: Request) {
         message = "內容不能為空白";
       } else if (error.message === "NOT_FOUND") {
         message = "找不到這則留言";
+      } else if (error.message === "NO_POSTGRES_URL") {
+        message = "請先在 Vercel 設定 Storage/Postgres，啟用 POSTGRES_URL。";
       }
     }
 
@@ -87,6 +99,12 @@ export async function PUT(request: Request) {
     return NextResponse.json({ ok: true });
   } catch (error) {
     console.error("[REORDER_MESSAGES]", error);
+    if (error instanceof Error && error.message === "NO_POSTGRES_URL") {
+      return NextResponse.json(
+        { error: "請先在 Vercel 設定 Storage/Postgres，啟用 POSTGRES_URL。" },
+        { status: 400 },
+      );
+    }
     return NextResponse.json(
       { error: "更新排序時發生錯誤" },
       { status: 400 },
