@@ -120,12 +120,13 @@ export default function Home() {
     toastTimer.current = setTimeout(() => setToast(null), 2600);
   };
 
-  const loadMessages = useCallback(async () => {
+  const loadMessages = useCallback(async (options?: { silent?: boolean }) => {
+    const silent = options?.silent ?? false;
     if (isFetching.current) return;
     isFetching.current = true;
     try {
       setError(null);
-      setLoading(true);
+      if (!silent) setLoading(true);
       const res = await fetch("/api/messages", { cache: "no-store" });
       if (!res.ok) {
         const data = await res.json().catch(() => null);
@@ -139,7 +140,7 @@ export default function Home() {
       pushToast("error", "載入留言失敗，請稍後再試。");
     } finally {
       isFetching.current = false;
-      setLoading(false);
+      if (!silent) setLoading(false);
     }
   }, []);
 
@@ -148,9 +149,9 @@ export default function Home() {
     const startPoll = () => {
       if (pollTimer.current) return;
       pollTimer.current = setInterval(() => {
-        if (document.visibilityState === "visible") {
-          loadMessages();
-        }
+      if (document.visibilityState === "visible") {
+        loadMessages({ silent: true });
+      }
       }, 500);
     };
     const stopPoll = () => {
@@ -339,7 +340,7 @@ export default function Home() {
             <div className="flex h-48 flex-col items-center justify-center gap-3 rounded-2xl border border-slate-200 bg-white text-sm text-slate-700">
               <p>{error}</p>
               <button
-                onClick={loadMessages}
+                onClick={() => loadMessages()}
                 className="rounded-full bg-slate-900 px-4 py-2 text-white shadow-sm transition hover:translate-y-px"
               >
                 重新嘗試
