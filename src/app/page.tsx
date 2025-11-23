@@ -103,7 +103,6 @@ export default function Home() {
   const [toast, setToast] = useState<ToastState>(null);
   const toastTimer = useRef<NodeJS.Timeout | null>(null);
   const pendingOrder = useRef<Message[] | null>(null);
-  const boardRef = useRef<HTMLDivElement | null>(null);
 
   const hasMessages = messages.length > 0;
 
@@ -210,8 +209,8 @@ export default function Home() {
     message: Message,
     offset: { x: number; y: number },
   ) => {
-    const nextX = message.pos_x + offset.x;
-    const nextY = message.pos_y + offset.y;
+    const nextX = Math.round(message.pos_x + offset.x);
+    const nextY = Math.round(message.pos_y + offset.y);
     const nextState = messages.map((m) =>
       m.id === message.id ? { ...m, pos_x: nextX, pos_y: nextY } : m,
     );
@@ -254,24 +253,15 @@ export default function Home() {
     <div className="relative min-h-screen overflow-hidden bg-gradient-to-b from-slate-50 via-white to-slate-100 text-slate-900">
       <AuroraBackground />
 
-      <main className="relative mx-auto flex min-h-screen max-w-6xl flex-col px-5 pb-28 pt-14 md:px-8">
-        <header className="flex items-center justify-between">
-          <div className="flex items-center gap-3 rounded-full bg-white px-4 py-2 text-sm text-slate-600 shadow-sm ring-1 ring-slate-200">
-            <span className="inline-flex h-2.5 w-2.5 rounded-full bg-emerald-400" />
-            開放留言，拖到任何位置，無需登入
+      <main className="relative mx-auto flex min-h-screen max-w-6xl flex-col px-5 pb-28 pt-8 md:px-8">
+        {savingOrder && (
+          <div className="absolute right-6 top-6 z-20 flex items-center gap-2 rounded-full bg-emerald-50 px-3 py-1 text-xs text-emerald-700 ring-1 ring-emerald-100">
+            <span className="h-2 w-2 rounded-full bg-emerald-500 animate-pulse" />
+            同步中…
           </div>
-          {savingOrder && (
-            <div className="flex items-center gap-2 rounded-full bg-emerald-50 px-3 py-1 text-xs text-emerald-700 ring-1 ring-emerald-100">
-              <span className="h-2 w-2 rounded-full bg-emerald-500 animate-pulse" />
-              同步中…
-            </div>
-          )}
-        </header>
+        )}
 
-        <section
-          ref={boardRef}
-          className="relative mt-8 flex-1 rounded-3xl border border-slate-200 bg-white/80 p-4 shadow-lg shadow-slate-200/40"
-        >
+        <section className="relative mt-4 flex-1">
           {loading ? (
             <div className="grid gap-3 md:grid-cols-2 lg:grid-cols-3">
               {[...Array(6)].map((_, idx) => (
@@ -298,7 +288,7 @@ export default function Home() {
               </button>
             </div>
           ) : (
-            <div className="relative h-[70vh] min-h-[400px]">
+            <div className="relative min-h-[70vh]">
               {!hasMessages && (
                 <div className="absolute inset-0 flex items-center justify-center text-sm text-slate-500">
                   尚無留言，點擊右下「新增留言」
@@ -310,7 +300,6 @@ export default function Home() {
                   message={message}
                   onSave={handleSaveEdit}
                   onDragEnd={handleDragEnd}
-                  containerRef={boardRef}
                 />
               ))}
             </div>
@@ -374,14 +363,12 @@ type StickyCardProps = {
   message: Message;
   onSave: (id: number, title: string, content: string) => Promise<void>;
   onDragEnd: (message: Message, offset: { x: number; y: number }) => void;
-  containerRef: React.RefObject<HTMLDivElement | null>;
 };
 
 function StickyCard({
   message,
   onSave,
   onDragEnd,
-  containerRef,
 }: StickyCardProps) {
   const [isEditing, setIsEditing] = useState(false);
   const [draftTitle, setDraftTitle] = useState(message.title);
@@ -409,7 +396,6 @@ function StickyCard({
     <motion.div
       drag
       dragMomentum={false}
-      dragConstraints={containerRef}
       onDragEnd={(_, info) => onDragEnd(message, info.offset)}
       initial={{ opacity: 0, scale: 0.98 }}
       animate={{ opacity: 1, scale: 1 }}
