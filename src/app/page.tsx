@@ -120,29 +120,34 @@ export default function Home() {
     toastTimer.current = setTimeout(() => setToast(null), 2600);
   };
 
-  const loadMessages = useCallback(async (options?: { silent?: boolean }) => {
-    const silent = options?.silent ?? false;
-    if (isFetching.current) return;
-    isFetching.current = true;
-    try {
-      setError(null);
-      if (!silent) setLoading(true);
-      const res = await fetch("/api/messages", { cache: "no-store" });
-      if (!res.ok) {
-        const data = await res.json().catch(() => null);
-        throw new Error(data?.error || "failed");
+  const loadMessages = useCallback(
+    async (options?: { silent?: boolean }) => {
+      const silent = options?.silent ?? false;
+      if (isFetching.current) return;
+      // 避免拖曳尚未同步時被輪詢覆寫位置
+      if (pendingOrder.current || savingOrder) return;
+      isFetching.current = true;
+      try {
+        setError(null);
+        if (!silent) setLoading(true);
+        const res = await fetch("/api/messages", { cache: "no-store" });
+        if (!res.ok) {
+          const data = await res.json().catch(() => null);
+          throw new Error(data?.error || "failed");
+        }
+        const data = (await res.json()) as { messages: Message[] };
+        setMessages(data.messages);
+      } catch (err) {
+        console.error(err);
+        setError("載入留言時出現問題，請確認 Storage/Postgres 設定。");
+        pushToast("error", "載入留言失敗，請稍後再試。");
+      } finally {
+        isFetching.current = false;
+        if (!silent) setLoading(false);
       }
-      const data = (await res.json()) as { messages: Message[] };
-      setMessages(data.messages);
-    } catch (err) {
-      console.error(err);
-      setError("載入留言時出現問題，請確認 Storage/Postgres 設定。");
-      pushToast("error", "載入留言失敗，請稍後再試。");
-    } finally {
-      isFetching.current = false;
-      if (!silent) setLoading(false);
-    }
-  }, []);
+    },
+    [savingOrder],
+  );
 
   useEffect(() => {
     loadMessages();
