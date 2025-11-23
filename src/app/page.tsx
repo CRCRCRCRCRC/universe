@@ -114,10 +114,6 @@ export default function Home() {
   const pollTimer = useRef<NodeJS.Timeout | null>(null);
   const lastSync = useRef<number>(0);
   const [scale, setScale] = useState(1);
-  const pinchState = useRef<{
-    startDistance: number;
-    startScale: number;
-  } | null>(null);
   const touchPoints = useRef<Map<number, { x: number; y: number }>>(new Map());
 
   const hasMessages = messages.length > 0;
@@ -316,14 +312,7 @@ export default function Home() {
 
     if (e.pointerType === "touch") {
       touchPoints.current.set(e.pointerId, { x: e.clientX, y: e.clientY });
-      if (touchPoints.current.size === 2) {
-        const points = Array.from(touchPoints.current.values());
-        const dx = points[0].x - points[1].x;
-        const dy = points[0].y - points[1].y;
-        const dist = Math.sqrt(dx * dx + dy * dy);
-        pinchState.current = { startDistance: dist, startScale: scale };
-        isPanning.current = false;
-      } else if (touchPoints.current.size === 1) {
+      if (touchPoints.current.size === 1) {
         isPanning.current = true;
         panStart.current = panRef.current;
         pointerStart.current = { x: e.clientX, y: e.clientY };
@@ -338,19 +327,8 @@ export default function Home() {
   };
 
   const handleCanvasPointerMove = (e: React.PointerEvent<HTMLDivElement>) => {
-    if (e.pointerType === "touch") {
-      if (!touchPoints.current.has(e.pointerId)) return;
+    if (e.pointerType === "touch" && touchPoints.current.has(e.pointerId)) {
       touchPoints.current.set(e.pointerId, { x: e.clientX, y: e.clientY });
-      if (pinchState.current && touchPoints.current.size >= 2) {
-        const points = Array.from(touchPoints.current.values()).slice(0, 2);
-        const dx = points[0].x - points[1].x;
-        const dy = points[0].y - points[1].y;
-        const dist = Math.sqrt(dx * dx + dy * dy);
-        const nextScale =
-          pinchState.current.startScale * (dist / pinchState.current.startDistance);
-        setScale(Math.min(2, Math.max(0.5, nextScale)));
-        return;
-      }
     }
 
     if (!isPanning.current) return;
@@ -363,9 +341,6 @@ export default function Home() {
 
   const handleCanvasPointerUp = (e: React.PointerEvent<HTMLDivElement>) => {
     touchPoints.current.delete(e.pointerId);
-    if (touchPoints.current.size < 2) {
-      pinchState.current = null;
-    }
     if (isPanning.current) {
       isPanning.current = false;
     }
