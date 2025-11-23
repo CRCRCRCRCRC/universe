@@ -103,6 +103,7 @@ export default function Home() {
   const [toast, setToast] = useState<ToastState>(null);
   const toastTimer = useRef<NodeJS.Timeout | null>(null);
   const pendingOrder = useRef<Message[] | null>(null);
+  const pendingSince = useRef<number | null>(null);
   const boardRef = useRef<HTMLDivElement | null>(null);
   const panRef = useRef<{ x: number; y: number }>({ x: 0, y: 0 });
   const [pan, setPan] = useState<{ x: number; y: number }>({ x: 0, y: 0 });
@@ -111,6 +112,7 @@ export default function Home() {
   const pointerStart = useRef<{ x: number; y: number }>({ x: 0, y: 0 });
   const isFetching = useRef(false);
   const pollTimer = useRef<NodeJS.Timeout | null>(null);
+  const lastSync = useRef<number>(0);
 
   const hasMessages = messages.length > 0;
 
@@ -124,8 +126,18 @@ export default function Home() {
     async (options?: { silent?: boolean }) => {
       const silent = options?.silent ?? false;
       if (isFetching.current) return;
-      // 避免拖曳尚未同步時被輪詢覆寫位置
-      if (pendingOrder.current || savingOrder) return;
+      // 避免拖曳尚未同步時被輪詢覆寫位置；若卡住超過 2s 則強制刷新。
+      const stuck =
+        pendingSince.current &&
+        Date.now() - pendingSince.current > 2000 &&
+        pendingOrder.current;
+      const allowForce =
+        Date.now() - lastSync.current > 5000; // 若長時間無成功同步，強制再拉一次
+      if (pendingOrder.current && !stuck && !allowForce) return;
+      if (stuck) {
+        pendingOrder.current = null;
+        pendingSince.current = null;
+      }
       isFetching.current = true;
       try {
         setError(null);
@@ -133,10 +145,11 @@ export default function Home() {
         const res = await fetch("/api/messages", { cache: "no-store" });
         if (!res.ok) {
           const data = await res.json().catch(() => null);
-          throw new Error(data?.error || "failed");
-        }
-        const data = (await res.json()) as { messages: Message[] };
-        setMessages(data.messages);
+        throw new Error(data?.error || "failed");
+      }
+      const data = (await res.json()) as { messages: Message[] };
+      setMessages(data.messages);
+      lastSync.current = Date.now();
       } catch (err) {
         console.error(err);
         setError("載入留言時出現問題，請確認 Storage/Postgres 設定。");
@@ -146,7 +159,7 @@ export default function Home() {
         if (!silent) setLoading(false);
       }
     },
-    [savingOrder],
+    [],
   );
 
   useEffect(() => {
@@ -256,6 +269,7 @@ export default function Home() {
     );
     setMessages(nextState);
     pendingOrder.current = nextState;
+    pendingSince.current = Date.now();
     await commitReorder();
   };
 
@@ -285,13 +299,15 @@ export default function Home() {
       pushToast("error", "位置同步失敗，稍後再試");
     } finally {
       pendingOrder.current = null;
+      pendingSince.current = null;
       setSavingOrder(false);
     }
   }, []);
 
   const handleCanvasPointerDown = (e: React.PointerEvent<HTMLDivElement>) => {
     if (e.button !== 0) return;
-    if (e.target !== boardRef.current) return;
+    const target = e.target as HTMLElement;
+    if (target.closest("[data-sticky-card]")) return;
     isPanning.current = true;
     panStart.current = panRef.current;
     pointerStart.current = { x: e.clientX, y: e.clientY };
@@ -354,7 +370,7 @@ export default function Home() {
           ) : (
             <div
               ref={boardRef}
-              className="relative min-h-[70vh] cursor-grab active:cursor-grabbing"
+              className="relative min-h-[70vh] cursor-grab touch-none active:cursor-grabbing"
               onPointerDown={handleCanvasPointerDown}
               onPointerMove={handleCanvasPointerMove}
               onPointerUp={handleCanvasPointerUp}
@@ -475,6 +491,7 @@ function StickyCard({
       initial={{ opacity: 0, scale: 0.98 }}
       animate={{ opacity: 1, scale: 1 }}
       className={`absolute w-72 cursor-grab rounded-2xl border border-slate-200 ${glassCard}`}
+      data-sticky-card
       style={{ x: message.pos_x + pan.x, y: message.pos_y + pan.y }}
     >
       <div className="flex flex-col gap-3 p-4">
