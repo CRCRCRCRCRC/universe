@@ -109,6 +109,8 @@ export default function Home() {
   const isPanning = useRef(false);
   const panStart = useRef<{ x: number; y: number }>({ x: 0, y: 0 });
   const pointerStart = useRef<{ x: number; y: number }>({ x: 0, y: 0 });
+  const isFetching = useRef(false);
+  const pollTimer = useRef<NodeJS.Timeout | null>(null);
 
   const hasMessages = messages.length > 0;
 
@@ -119,6 +121,8 @@ export default function Home() {
   };
 
   const loadMessages = useCallback(async () => {
+    if (isFetching.current) return;
+    isFetching.current = true;
     try {
       setError(null);
       setLoading(true);
@@ -134,13 +138,37 @@ export default function Home() {
       setError("載入留言時出現問題，請確認 Storage/Postgres 設定。");
       pushToast("error", "載入留言失敗，請稍後再試。");
     } finally {
+      isFetching.current = false;
       setLoading(false);
     }
   }, []);
 
   useEffect(() => {
     loadMessages();
+    const startPoll = () => {
+      if (pollTimer.current) return;
+      pollTimer.current = setInterval(() => {
+        if (document.visibilityState === "visible") {
+          loadMessages();
+        }
+      }, 500);
+    };
+    const stopPoll = () => {
+      if (pollTimer.current) {
+        clearInterval(pollTimer.current);
+        pollTimer.current = null;
+      }
+    };
+    startPoll();
+    const onVisibility = () => {
+      if (document.visibilityState === "visible") startPoll();
+      else stopPoll();
+    };
+    document.addEventListener("visibilitychange", onVisibility);
+
     return () => {
+      stopPoll();
+      document.removeEventListener("visibilitychange", onVisibility);
       if (toastTimer.current) clearTimeout(toastTimer.current);
     };
   }, [loadMessages]);
