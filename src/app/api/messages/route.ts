@@ -2,7 +2,7 @@ import { NextResponse } from "next/server";
 import {
   createMessage,
   fetchMessages,
-  reorderMessages,
+  updatePositions,
   updateMessageContent,
 } from "@/lib/db";
 
@@ -78,24 +78,25 @@ export async function PATCH(request: Request) {
 
 export async function PUT(request: Request) {
   try {
-    const { order } = await request.json();
+    const { positions } = await request.json();
 
     if (
-      !Array.isArray(order) ||
-      order.some(
+      !Array.isArray(positions) ||
+      positions.some(
         (item) =>
           typeof item !== "object" ||
           typeof item.id !== "number" ||
-          typeof item.order_index !== "number",
+          typeof item.pos_x !== "number" ||
+          typeof item.pos_y !== "number",
       )
     ) {
       return NextResponse.json(
-        { error: "排序資料格式錯誤" },
+        { error: "座標資料格式錯誤" },
         { status: 400 },
       );
     }
 
-    await reorderMessages(order);
+    await updatePositions(positions);
     return NextResponse.json({ ok: true });
   } catch (error) {
     console.error("[REORDER_MESSAGES]", error);
@@ -106,7 +107,7 @@ export async function PUT(request: Request) {
       );
     }
     return NextResponse.json(
-      { error: "更新排序時發生錯誤" },
+      { error: "更新座標時發生錯誤" },
       { status: 400 },
     );
   }
