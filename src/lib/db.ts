@@ -21,7 +21,7 @@ async function ensureTable() {
       order_index INTEGER NOT NULL DEFAULT 0,
       created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
       updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
-    );`;
+    );`.then(() => undefined);
   }
   await tableReady;
 }
@@ -110,13 +110,13 @@ export async function reorderMessages(
 ): Promise<void> {
   await ensureTable();
 
-  await sql.begin(async (tx) => {
-    for (const item of order) {
-      await tx`
-        UPDATE guestbook_messages
-        SET order_index = ${item.order_index}, updated_at = NOW()
-        WHERE id = ${item.id};
-      `;
-    }
-  });
+  if (order.length === 0) return;
+
+  for (const item of order) {
+    await sql`
+      UPDATE guestbook_messages
+      SET order_index = ${item.order_index}, updated_at = NOW()
+      WHERE id = ${item.id};
+    `;
+  }
 }

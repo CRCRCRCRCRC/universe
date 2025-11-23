@@ -21,7 +21,11 @@ type ToastState = { type: "success" | "error"; message: string } | null;
 
 const fadeIn = {
   initial: { opacity: 0, y: 24 },
-  animate: { opacity: 1, y: 0, transition: { duration: 0.4, ease: "easeOut" } },
+  animate: {
+    opacity: 1,
+    y: 0,
+    transition: { duration: 0.4, ease: [0.22, 1, 0.36, 1] as const },
+  },
 };
 
 const glassCard =
@@ -758,12 +762,20 @@ function AuroraBackground() {
       <motion.div
         className="absolute -left-24 top-10 h-64 w-64 rounded-full bg-teal-500/20 blur-[120px]"
         animate={{ y: [0, -12, 0], x: [0, 8, 0] }}
-        transition={{ repeat: Infinity, duration: 10, ease: "easeInOut" }}
+        transition={{
+          repeat: Infinity,
+          duration: 10,
+          ease: [0.45, 0, 0.55, 1] as const,
+        }}
       />
       <motion.div
         className="absolute -right-12 top-32 h-72 w-72 rounded-full bg-fuchsia-500/15 blur-[120px]"
         animate={{ y: [0, 16, 0], x: [0, -10, 0] }}
-        transition={{ repeat: Infinity, duration: 12, ease: "easeInOut" }}
+        transition={{
+          repeat: Infinity,
+          duration: 12,
+          ease: [0.45, 0, 0.55, 1] as const,
+        }}
       />
       <div className="absolute inset-0 bg-[linear-gradient(120deg,rgba(255,255,255,0.06)_1px,transparent_1px)] bg-[length:140px_140px] opacity-10" />
     </div>
