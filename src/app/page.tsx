@@ -103,6 +103,12 @@ export default function Home() {
   const [toast, setToast] = useState<ToastState>(null);
   const toastTimer = useRef<NodeJS.Timeout | null>(null);
   const pendingOrder = useRef<Message[] | null>(null);
+  const boardRef = useRef<HTMLDivElement | null>(null);
+  const panRef = useRef<{ x: number; y: number }>({ x: 0, y: 0 });
+  const [pan, setPan] = useState<{ x: number; y: number }>({ x: 0, y: 0 });
+  const isPanning = useRef(false);
+  const panStart = useRef<{ x: number; y: number }>({ x: 0, y: 0 });
+  const pointerStart = useRef<{ x: number; y: number }>({ x: 0, y: 0 });
 
   const hasMessages = messages.length > 0;
 
@@ -249,6 +255,30 @@ export default function Home() {
     }
   }, []);
 
+  const handleCanvasPointerDown = (e: React.PointerEvent<HTMLDivElement>) => {
+    if (e.button !== 0) return;
+    if (e.target !== boardRef.current) return;
+    isPanning.current = true;
+    panStart.current = panRef.current;
+    pointerStart.current = { x: e.clientX, y: e.clientY };
+    e.currentTarget.setPointerCapture(e.pointerId);
+  };
+
+  const handleCanvasPointerMove = (e: React.PointerEvent<HTMLDivElement>) => {
+    if (!isPanning.current) return;
+    const dx = e.clientX - pointerStart.current.x;
+    const dy = e.clientY - pointerStart.current.y;
+    const next = { x: panStart.current.x + dx, y: panStart.current.y + dy };
+    panRef.current = next;
+    setPan(next);
+  };
+
+  const handleCanvasPointerUp = (e: React.PointerEvent<HTMLDivElement>) => {
+    if (!isPanning.current) return;
+    isPanning.current = false;
+    e.currentTarget.releasePointerCapture(e.pointerId);
+  };
+
   return (
     <div className="relative min-h-screen overflow-hidden bg-gradient-to-b from-slate-50 via-white to-slate-100 text-slate-900">
       <AuroraBackground />
@@ -288,7 +318,15 @@ export default function Home() {
               </button>
             </div>
           ) : (
-            <div className="relative min-h-[70vh]">
+            <div
+              ref={boardRef}
+              className="relative min-h-[70vh] cursor-grab active:cursor-grabbing"
+              onPointerDown={handleCanvasPointerDown}
+              onPointerMove={handleCanvasPointerMove}
+              onPointerUp={handleCanvasPointerUp}
+              onPointerLeave={handleCanvasPointerUp}
+            >
+              <div className="pointer-events-none absolute inset-0 bg-[linear-gradient(90deg,rgba(15,23,42,0.05)_1px,transparent_1px),linear-gradient(0deg,rgba(15,23,42,0.05)_1px,transparent_1px)] bg-[size:160px_160px] opacity-70" />
               {!hasMessages && (
                 <div className="absolute inset-0 flex items-center justify-center text-sm text-slate-500">
                   尚無留言，點擊右下「新增留言」
@@ -300,6 +338,7 @@ export default function Home() {
                   message={message}
                   onSave={handleSaveEdit}
                   onDragEnd={handleDragEnd}
+                  pan={pan}
                 />
               ))}
             </div>
@@ -363,12 +402,14 @@ type StickyCardProps = {
   message: Message;
   onSave: (id: number, title: string, content: string) => Promise<void>;
   onDragEnd: (message: Message, offset: { x: number; y: number }) => void;
+  pan: { x: number; y: number };
 };
 
 function StickyCard({
   message,
   onSave,
   onDragEnd,
+  pan,
 }: StickyCardProps) {
   const [isEditing, setIsEditing] = useState(false);
   const [draftTitle, setDraftTitle] = useState(message.title);
@@ -400,7 +441,7 @@ function StickyCard({
       initial={{ opacity: 0, scale: 0.98 }}
       animate={{ opacity: 1, scale: 1 }}
       className={`absolute w-72 cursor-grab rounded-2xl border border-slate-200 ${glassCard}`}
-      style={{ x: message.pos_x, y: message.pos_y }}
+      style={{ x: message.pos_x + pan.x, y: message.pos_y + pan.y }}
     >
       <div className="flex flex-col gap-3 p-4">
         <div className="flex items-start justify-between gap-2">

@@ -2,7 +2,7 @@
 REM 自動 add、commit、push 到 main
 
 echo.
-set /p commitMsg=Enter the commit message： 
+set /p commitMsg=Enter the commit message 
 
 git add .
 git commit -m "%commitMsg%"
