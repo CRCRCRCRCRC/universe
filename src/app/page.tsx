@@ -113,6 +113,11 @@ export default function Home() {
   const isFetching = useRef(false);
   const pollTimer = useRef<NodeJS.Timeout | null>(null);
   const lastSync = useRef<number>(0);
+  const [scale, setScale] = useState(1);
+  const pinchState = useRef<{
+    startDistance: number;
+    startScale: number;
+  } | null>(null);
 
   const hasMessages = messages.length > 0;
 
@@ -315,6 +320,29 @@ export default function Home() {
   };
 
   const handleCanvasPointerMove = (e: React.PointerEvent<HTMLDivElement>) => {
+    // Pinch zoom (two fingers)
+    if (e.pointerType === "touch" && e.nativeEvent instanceof PointerEvent) {
+      const ev = e.nativeEvent as PointerEvent;
+      const coalesced = ev.getCoalescedEvents?.() ?? [ev];
+      const touches = coalesced.filter(
+        (item: PointerEvent) => item.pointerType === "touch",
+      );
+      if (touches.length >= 2) {
+        const [t1, t2] = touches;
+        const dx = t1.clientX - t2.clientX;
+        const dy = t1.clientY - t2.clientY;
+        const dist = Math.sqrt(dx * dx + dy * dy);
+        if (!pinchState.current) {
+          pinchState.current = { startDistance: dist, startScale: scale };
+        } else {
+          const nextScale =
+            pinchState.current.startScale * (dist / pinchState.current.startDistance);
+          setScale(Math.min(2, Math.max(0.5, nextScale)));
+        }
+        return;
+      }
+    }
+
     if (!isPanning.current) return;
     const dx = e.clientX - pointerStart.current.x;
     const dy = e.clientY - pointerStart.current.y;
@@ -324,9 +352,14 @@ export default function Home() {
   };
 
   const handleCanvasPointerUp = (e: React.PointerEvent<HTMLDivElement>) => {
+    pinchState.current = null;
     if (!isPanning.current) return;
     isPanning.current = false;
     e.currentTarget.releasePointerCapture(e.pointerId);
+  };
+
+  const zoomTo = (next: number) => {
+    setScale(Math.min(2, Math.max(0.5, next)));
   };
 
   return (
@@ -334,6 +367,27 @@ export default function Home() {
       <AuroraBackground />
 
       <main className="relative mx-auto flex min-h-screen max-w-6xl flex-col px-5 pb-28 pt-8 md:px-8">
+        <div className="pointer-events-none fixed bottom-6 left-6 z-30 hidden flex-col gap-2 md:flex">
+          <button
+            onClick={() => zoomTo(scale + 0.1)}
+            className="pointer-events-auto rounded-full bg-white px-3 py-2 text-sm font-semibold text-slate-700 shadow ring-1 ring-slate-200 transition hover:-translate-y-px"
+          >
+            放大
+          </button>
+          <button
+            onClick={() => zoomTo(1)}
+            className="pointer-events-auto rounded-full bg-white px-3 py-2 text-sm font-semibold text-slate-700 shadow ring-1 ring-slate-200 transition hover:-translate-y-px"
+          >
+            中等
+          </button>
+          <button
+            onClick={() => zoomTo(scale - 0.1)}
+            className="pointer-events-auto rounded-full bg-white px-3 py-2 text-sm font-semibold text-slate-700 shadow ring-1 ring-slate-200 transition hover:-translate-y-px"
+          >
+            縮小
+          </button>
+        </div>
+
         {savingOrder && (
           <div className="absolute right-6 top-6 z-20 flex items-center gap-2 rounded-full bg-emerald-50 px-3 py-1 text-xs text-emerald-700 ring-1 ring-emerald-100">
             <span className="h-2 w-2 rounded-full bg-emerald-500 animate-pulse" />
@@ -375,6 +429,10 @@ export default function Home() {
               onPointerMove={handleCanvasPointerMove}
               onPointerUp={handleCanvasPointerUp}
               onPointerLeave={handleCanvasPointerUp}
+              style={{
+                transform: `translate(${pan.x}px, ${pan.y}px) scale(${scale})`,
+                transformOrigin: "0 0",
+              }}
             >
               <div className="pointer-events-none absolute inset-0 bg-[linear-gradient(90deg,rgba(15,23,42,0.05)_1px,transparent_1px),linear-gradient(0deg,rgba(15,23,42,0.05)_1px,transparent_1px)] bg-[size:160px_160px] opacity-70" />
               {!hasMessages && (
@@ -388,7 +446,6 @@ export default function Home() {
                   message={message}
                   onSave={handleSaveEdit}
                   onDragEnd={handleDragEnd}
-                  pan={pan}
                 />
               ))}
             </div>
@@ -452,14 +509,12 @@ type StickyCardProps = {
   message: Message;
   onSave: (id: number, title: string, content: string) => Promise<void>;
   onDragEnd: (message: Message, offset: { x: number; y: number }) => void;
-  pan: { x: number; y: number };
 };
 
 function StickyCard({
   message,
   onSave,
   onDragEnd,
-  pan,
 }: StickyCardProps) {
   const [isEditing, setIsEditing] = useState(false);
   const [draftTitle, setDraftTitle] = useState(message.title);
@@ -492,7 +547,7 @@ function StickyCard({
       animate={{ opacity: 1, scale: 1 }}
       className={`absolute w-72 cursor-grab rounded-2xl border border-slate-200 ${glassCard}`}
       data-sticky-card
-      style={{ x: message.pos_x + pan.x, y: message.pos_y + pan.y }}
+      style={{ x: message.pos_x, y: message.pos_y }}
     >
       <div className="flex flex-col gap-3 p-4">
         <div className="flex items-start justify-between gap-2">
