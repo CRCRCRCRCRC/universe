@@ -118,6 +118,7 @@ export default function Home() {
     startDistance: number;
     startScale: number;
   } | null>(null);
+  const touchPoints = useRef<Map<number, { x: number; y: number }>>(new Map());
 
   const hasMessages = messages.length > 0;
 
@@ -310,35 +311,44 @@ export default function Home() {
   }, []);
 
   const handleCanvasPointerDown = (e: React.PointerEvent<HTMLDivElement>) => {
-    if (e.button !== 0) return;
     const target = e.target as HTMLElement;
     if (target.closest("[data-sticky-card]")) return;
-    isPanning.current = true;
-    panStart.current = panRef.current;
-    pointerStart.current = { x: e.clientX, y: e.clientY };
+
+    if (e.pointerType === "touch") {
+      touchPoints.current.set(e.pointerId, { x: e.clientX, y: e.clientY });
+      if (touchPoints.current.size === 2) {
+        const points = Array.from(touchPoints.current.values());
+        const dx = points[0].x - points[1].x;
+        const dy = points[0].y - points[1].y;
+        const dist = Math.sqrt(dx * dx + dy * dy);
+        pinchState.current = { startDistance: dist, startScale: scale };
+        isPanning.current = false;
+      } else if (touchPoints.current.size === 1) {
+        isPanning.current = true;
+        panStart.current = panRef.current;
+        pointerStart.current = { x: e.clientX, y: e.clientY };
+      }
+    } else if (e.button === 0) {
+      isPanning.current = true;
+      panStart.current = panRef.current;
+      pointerStart.current = { x: e.clientX, y: e.clientY };
+    }
+
     e.currentTarget.setPointerCapture(e.pointerId);
   };
 
   const handleCanvasPointerMove = (e: React.PointerEvent<HTMLDivElement>) => {
-    // Pinch zoom (two fingers)
-    if (e.pointerType === "touch" && e.nativeEvent instanceof PointerEvent) {
-      const ev = e.nativeEvent as PointerEvent;
-      const coalesced = ev.getCoalescedEvents?.() ?? [ev];
-      const touches = coalesced.filter(
-        (item: PointerEvent) => item.pointerType === "touch",
-      );
-      if (touches.length >= 2) {
-        const [t1, t2] = touches;
-        const dx = t1.clientX - t2.clientX;
-        const dy = t1.clientY - t2.clientY;
+    if (e.pointerType === "touch") {
+      if (!touchPoints.current.has(e.pointerId)) return;
+      touchPoints.current.set(e.pointerId, { x: e.clientX, y: e.clientY });
+      if (pinchState.current && touchPoints.current.size >= 2) {
+        const points = Array.from(touchPoints.current.values()).slice(0, 2);
+        const dx = points[0].x - points[1].x;
+        const dy = points[0].y - points[1].y;
         const dist = Math.sqrt(dx * dx + dy * dy);
-        if (!pinchState.current) {
-          pinchState.current = { startDistance: dist, startScale: scale };
-        } else {
-          const nextScale =
-            pinchState.current.startScale * (dist / pinchState.current.startDistance);
-          setScale(Math.min(2, Math.max(0.5, nextScale)));
-        }
+        const nextScale =
+          pinchState.current.startScale * (dist / pinchState.current.startDistance);
+        setScale(Math.min(2, Math.max(0.5, nextScale)));
         return;
       }
     }
@@ -352,9 +362,13 @@ export default function Home() {
   };
 
   const handleCanvasPointerUp = (e: React.PointerEvent<HTMLDivElement>) => {
-    pinchState.current = null;
-    if (!isPanning.current) return;
-    isPanning.current = false;
+    touchPoints.current.delete(e.pointerId);
+    if (touchPoints.current.size < 2) {
+      pinchState.current = null;
+    }
+    if (isPanning.current) {
+      isPanning.current = false;
+    }
     e.currentTarget.releasePointerCapture(e.pointerId);
   };
 
